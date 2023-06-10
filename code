@@ -1,0 +1,228 @@
+import pandas as pd
+import re 
+from datetime import datetime
+
+# some useful functions 
+
+# a function who determines if a string contains at least one number
+def contains_digit(string):
+    return any(char.isdigit() for char in string)
+
+# a function who determines if a string contains at least one letter
+def contains_letter(coord):
+    return any(char.isalpha() for char in coord)
+
+
+# a function that converts GPS coordinates from DMS (Degrees Minutes Seconds) to latitude, longitude
+def convert_coordinates(coords_str):
+    # format verification
+    inp = input('Is the format exactly N45°16,30", E4°15,29" (y/n) ? ')
+    if inp == 'n':
+        coords_str = input('Please write the coordinates in the right format N45°16,30, E4°15,29')
+
+    # Extract hemisphere direction
+    lat_dir = coords_str[0]
+    print("lat_dir = ", lat_dir)
+    lon_dir = coords_str.split()[1][0]
+    print("lon_dir = ", lon_dir)
+
+    # Extract degrees and minutes from latitude
+    lat_str = coords_str.split()[0][1:]
+    print("lat_str = ", lat_str)
+    lat_degrees = float(lat_str.split("°")[0])
+    print("lat_degrees = ", lat_degrees)
+    lat_minutes_str = lat_str.split("°")[1][:-1].replace(",", ".")
+    if len(lat_minutes_str) == 0:
+        lat_minutes = 0
+    else:
+        lat_minutes = float(lat_minutes_str)
+
+    
+    # Extract degrees and minutes from longitude
+    lon_str = coords_str.split()[1][1:]
+    print("lon_str = ", lon_str)
+    lon_degrees = float(lon_str.split("°")[0])
+    print("lon_degrees = ", lon_degrees)
+    lon_minutes_str = lon_str.split("°")[1][:-1].replace(",", ".")
+    lon_minutes = float(lon_minutes_str) if lon_minutes_str else 0
+    print("lon_minutes = ", lon_minutes)
+
+    # Calculate decimal coordinates
+    lat_decimal = lat_degrees + (lat_minutes / 60)
+    lon_decimal = lon_degrees + (lon_minutes / 60)
+
+    # Apply negative sign if necessary
+    if lat_dir == "S":
+        lat_decimal *= -1
+    if lon_dir == "W":
+        lon_decimal *= -1
+
+    # Give the result back as a string 
+    return f"{lat_decimal},{lon_decimal}"
+
+# function to pre-homogeneize the coordinates to avoid mishandling
+pattern = r"^\d+\.\d+,\d+\.\d+$"
+def add_space(gps_string):
+    if re.match(pattern, gps_string):
+        print(gps_string.replace(',', ', '))
+        return gps_string.replace(',', ', ')
+    else:
+        return gps_string
+ 
+ # converts different format of dates to dd/mm/yy
+ def convert_to_dd_mm_yy(date_string):
+    # try to parse the date string in different formats
+    for fmt in ['%Y-%m-%d','%d/%m/%Y', '%d/%m/%y', '%m/%d/%y', '%m/%d/%Y', '%Y-%m-%dT%H:%M:%S', '%Y-%m-%d %H:%M', '%A, %B %d, %Y', '%Y-%m-%d %H:%M:%S','%d-%m-%y - %H:%M','%d/%m/%Y - %H:%M']:
+        try:
+            # parse the date string
+            date = datetime.strptime(date_string, fmt)
+            # format the date as dd/mm/yy
+            return date.strftime('%d/%m/%y')
+        except ValueError:
+            pass
+    # if none of the formats work, return None
+    print(date_string)
+    return None
+
+# opening the dataframe containing GPS coordinates, dates etc.
+MSID = pd.read_csv("Master soil ID - received.csv")
+initial_size = len(MSID)
+
+# creating a new MSID removing rows without GPS coordinates
+new_MSID = pd.DataFrame()
+for line in range (len(MSID)) :
+    if contains_digit(str(MSID.iloc[line][4])) :
+        new_MSID = new_MSID.append(MSID.iloc[line])
+
+new_MSID.reset_index()
+
+# handling the coordinates with letters (DM, DMS and other unwanted format)
+
+new_MSID.astype({'GPS': str})
+trans_MSID = pd.DataFrame()
+
+for i in range(len(new_MSID)):
+    
+    if contains_letter(new_MSID.iloc[i][4]):
+        print('************************')
+        print(new_MSID.iloc[i][4].replace("'", ","))
+        print('index =', i)
+        new_row = []
+        new_coord = []
+        inp = input('Should we keep these coordinates (y/n)? ')
+        if inp == 'y':
+            inp2 = input('Do the coordinate take the following form : N45°16,30, E4°15,29 ? (y/n) ')
+            if inp2 == 'y':
+                while True:
+                    try:
+                        new_coord = convert_coordinates(new_MSID.iloc[i][4].replace("'", ","))
+                        new_row = new_MSID.iloc[i].copy()
+                        new_row[4] = str(new_coord)
+                        print('New coordinate:', new_coord)
+                        print('New row :', new_row)
+                        trans_MSID = trans_MSID.append(new_row)
+                        break
+                    except:
+                        print("Error: The coordinate conversion failed.")
+                        print("Please try again or enter 'n' to input the coordinates manually.")
+                        inp3 = input("Enter 'n' to input the coordinates manually: ")
+                        if inp3 == 'n':
+                            inp4 = input('Please write the coordinates in the right format: latitude, longitude ')
+                            new_row = new_MSID.iloc[i].copy()
+                            new_row[4] = str(inp4)
+                            print('New row :', new_row)
+                            print('New coordinate:', new_row[4])
+                            trans_MSID = trans_MSID.append(new_row)
+                            break
+                else:
+                    new_row = new_MSID.iloc[i].copy()
+                    new_row[4] = str(new_coord)
+                    print('New coordinate:', new_coord)
+                    print('New row :', new_row)
+                    trans_MSID = trans_MSID.append(new_row)
+            else:
+                inp4 = input('Please write the coordinates in the right format: latitude, longitude ')
+                new_row = new_MSID.iloc[i].copy()
+                new_row[4] = str(inp4)
+                print('New row :', new_row)
+                print('New coordinate:', new_row[4])
+                trans_MSID = trans_MSID.append(new_row)
+        else:
+            new_row = new_MSID.iloc[i].copy()
+            new_row[4] = str(new_coord)
+            print('New coordinate:', new_row[4])
+            print('New row :', new_row)
+            trans_MSID = trans_MSID.append(new_row)
+
+    else:
+        trans_MSID = trans_MSID.append(new_MSID.iloc[i])
+
+new_MSID = trans_MSID
+
+
+# removing all parentheses and replace "_" and ";" and " " by "," to homogeneize the GPS coordinates that are in the right format (latitude, longitude) but not written exactly the same (for example latitude longitude, latitude ; longitude etc.)
+new_MSID['GPS'] = new_MSID['GPS'].astype(str)
+new_MSID['GPS'] = new_MSID['GPS'].apply(lambda x: re.sub(r'\(|\)', '', x))
+new_MSID['GPS'] = new_MSID['GPS'].apply(add_space)       
+new_MSID['GPS'] = new_MSID['GPS'].apply(lambda x: re.sub(r"(\d+),(\d+)", '.', x))
+
+new_MSID['GPS'] = new_MSID['GPS'].apply(lambda x : re.sub('_',',',x))
+new_MSID['GPS'] = new_MSID['GPS'].apply(lambda x : re.sub(';',',',x))
+new_MSID['GPS'] = new_MSID['GPS'].apply(lambda x : re.sub(' ',',',x))
+        
+# separating the coordinates in lattitude and longitude
+
+latitude = []
+longitude = []
+nb_bad_coord = 0
+bad_coord = []
+
+for i in new_MSID['GPS'] :
+    if ',' in str(i) :
+        latitude.append(str(i).split(",")[0])
+        longitude.append(str(i).split(",")[-1])
+    else : 
+        print(i)
+        nb_bad_coord += 1
+        bad_coord.append(str(i))
+
+
+latitude
+print("There are", nb_bad_coord, "GPS coordinates which do not have the right format")
+bad_coord
+
+# deleting rows with bad coordinates
+inp = input("Do you wish to delete those rows ? (y/n) ")
+if inp == "y" :
+    new_MSID = new_MSID[~new_MSID['GPS'].isin(bad_coord)]
+    print("Deleted", nb_bad_coord, "rows with bad coordinates from the DataFrame.")
+
+#adding the latitude and longitude columns in the dataframe
+new_MSID['latitude'] = latitude
+new_MSID['longitude'] = longitude
+
+#deleting the GPS column and put the latitude and longitude as numbers
+del new_MSID['GPS']
+
+new_MSID['latitude'] = pd.to_numeric(new_MSID['latitude'], errors='coerce')
+new_MSID['longitude'] = pd.to_numeric(new_MSID['longitude'], errors='coerce')
+
+new_MSID = new_MSID.dropna(subset=['latitude'])
+new_MSID = new_MSID.dropna(subset=['longitude'])
+
+final_size = len(new_MSID)
+print("There originally was ",initial_size,"rows in our dataframe, now with coordinates homogeneization we have ",final_size," rows left")
+
+# list of dates in different formats
+date_list = new_MSID['Date of collection']
+string_list = []
+for date in date_list :
+    string_list.append(str(date))
+    
+# convert the dates in the list to dd/mm/yy format
+dd_mm_yy_list = [convert_to_dd_mm_yy(date) for date in string_list]
+
+print(dd_mm_yy_list) #checking if every format was taken into account
+
+new_MSID['Date of collection'] = dd_mm_yy_list #modifying the table with harmonized dates
+print(len(new_MSID))
